@@ -5,6 +5,8 @@
 #include <ace/managers/ptplayer.h>
 
 static tPtplayerMod *mod;
+static tPtplayerSfx *sfx;
+static UWORD frameCounter = 0;
 
 void introCreate(void)
 {
@@ -26,12 +28,31 @@ void introCreate(void)
 
     // Start playback
     ptplayerEnableMusic(1);
+
+    // Load the HUD message sound effect (using Chip RAM by passing 0 for isFast)
+    sfx = ptplayerSfxCreateFromPath("sound/sfx/hud_msg.sfx", 0);
+    if (!sfx) {
+        logWrite("ERR: Failed to load sound/sfx/hud_msg.sfx\n");
+    }
+
+    frameCounter = 0;
 }
 
 void introLoop(void)
 {
     // Pump the ptplayer state machine each frame
     ptplayerProcess();
+
+    // Play HUD message sound effect every 5 seconds (250 frames in PAL mode)
+    frameCounter++;
+    if (frameCounter >= 250)
+    {
+        if (sfx)
+        {
+            ptplayerSfxPlay(sfx, PTPLAYER_SFX_CHANNEL_ANY, 64, 1);
+        }
+        frameCounter = 0;
+    }
 
     // keyUse returns 1 only on the first frame the key transitions to pressed,
     // then marks it USED so it won't re-fire while held down.
@@ -50,5 +71,9 @@ void introDestroy(void)
     if (mod) {
         ptplayerModDestroy(mod);
         mod = NULL;
+    }
+    if (sfx) {
+        ptplayerSfxDestroy(sfx);
+        sfx = NULL;
     }
 }

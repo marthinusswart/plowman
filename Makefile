@@ -49,7 +49,16 @@ ASFLAGS   = -mcpu=68000 -g --register-prefix-optional -I$(SDKDIR)
 LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map
 VASMFLAGS = -m68000 -Felf -opt-fconst -nowarn=62 -dwarf=3 -quiet -x -I. -I$(SDKDIR)
 
-all: $(OUT).exe
+WAVS := $(wildcard sound/wav/*.wav)
+SFXS := $(patsubst sound/wav/%.wav,sound/sfx/%.sfx,$(WAVS))
+
+all: $(SFXS) $(OUT).exe
+
+sound/sfx/%.sfx: sound/wav/%.wav
+	$(info Converting $< -> $@)
+	@-mkdir -p sound/sfx
+	@python3 tools/wav2sfx.py $< $@
+
 
 $(OUT).exe: $(OUT).elf
 	$(info Elf2Hunk $(program).exe)
@@ -74,8 +83,9 @@ clean:
 ifdef WINDOWS
 	@-rmdir /s /q obj 2>nul
 	@-rmdir /s /q out 2>nul
+	@-rmdir /s /q sound\sfx 2>nul
 else
-	@$(RM) -r obj out
+	@$(RM) -r obj out sound/sfx
 endif
 
 -include $(objects:.o=.d)
