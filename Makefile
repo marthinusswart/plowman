@@ -54,11 +54,13 @@ all: $(OUT).exe
 $(OUT).exe: $(OUT).elf
 	$(info Elf2Hunk $(program).exe)
 	@elf2hunk $(OUT).elf $(OUT).exe
-	$(info Copying bpl/ folder to out/)
+	$(info Copying bpl/ and sound/ folders to out/)
 ifdef WINDOWS
 	@xcopy /E /I /Y bpl out\bpl >nul 2>&1
+	@xcopy /E /I /Y sound out\sound >nul 2>&1
 else
 	@cp -r bpl out/
+	@cp -r sound out/
 endif
 
 $(OUT).elf: $(objects)

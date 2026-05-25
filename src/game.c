@@ -12,66 +12,83 @@
 #include <ace/utils/font.h>
 #include <ace/managers/viewport/simplebuffer.h>
 #include <ace/utils/extview.h>
+#include <ace/generic/screen.h>
 
 #include "gamelogic/intro/intro.h"
+#include "support/gcc8_c_support.h"
 
 // Global library base pointers required by Amiga OS and Bartman GCC
 struct ExecBase *SysBase;
 struct DosLibrary *DOSBase;
 struct GfxBase *GfxBase;
 
-tView *g_pView;
-tVPort *g_pVPort;
-tSimpleBufferManager *g_pBuffer;
-tState *g_pIntroState;
-tStateManager *g_pStateManager;
+tView *view;
+tVPort *vPort;
+tSimpleBufferManager *buffer;
+tState *introState;
+tStateManager *stateManager;
 
 void genericCreate(void)
 {
     // Initialize the ACE State Manager
-    g_pStateManager = stateManagerCreate();
+    stateManager = stateManagerCreate();
 
-    // Setup basic display View
-    g_pView = viewCreate(0,
-                         TAG_VIEW_GLOBAL_PALETTE, 1,
-                         TAG_DONE);
+    // Initialize key manager so keyboard input can be processed
+    keyCreate();
+
+    // Setup PAL display View: force 320x256 regardless of host hardware
+    view = viewCreate(0,
+                      TAG_VIEW_GLOBAL_PALETTE, 1,
+                      TAG_VIEW_WINDOW_WIDTH, SCREEN_PAL_WIDTH,
+                      TAG_VIEW_WINDOW_HEIGHT, SCREEN_PAL_HEIGHT,
+                      TAG_VIEW_WINDOW_START_Y, SCREEN_PAL_YOFFSET,
+                      TAG_DONE);
 
     // Create standard Viewport: 320x256, 5 bitplanes
-    g_pVPort = vPortCreate(0,
-                           TAG_VPORT_VIEW, g_pView,
-                           TAG_VPORT_BPP, 5,
-                           TAG_DONE);
+    vPort = vPortCreate(0,
+                        TAG_VPORT_VIEW, view,
+                        TAG_VPORT_BPP, 5,
+                        TAG_VPORT_WIDTH, SCREEN_PAL_WIDTH,
+                        TAG_VPORT_HEIGHT, SCREEN_PAL_HEIGHT,
+                        TAG_DONE);
 
     // Create double-buffered SimpleBuffer manager
-    g_pBuffer = simpleBufferCreate(0,
-                                   TAG_SIMPLEBUFFER_VPORT, g_pVPort,
-                                   TAG_SIMPLEBUFFER_BITMAP_FLAGS, BMF_CLEAR,
-                                   TAG_SIMPLEBUFFER_IS_DBLBUF, 1,
-                                   TAG_DONE);
+    buffer = simpleBufferCreate(0,
+                                TAG_SIMPLEBUFFER_VPORT, vPort,
+                                TAG_SIMPLEBUFFER_BITMAP_FLAGS, BMF_CLEAR,
+                                TAG_SIMPLEBUFFER_IS_DBLBUF, 1,
+                                TAG_DONE);
 
     // Load the view to the display hardware immediately
-    viewLoad(g_pView);
+    viewLoad(view);
+
+    KPrintF("Starting game");
 
     // Build and push the intro state
-    g_pIntroState = stateCreate(introCreate, introLoop, introDestroy, 0, 0);
-    statePush(g_pStateManager, g_pIntroState);
+    introState = stateCreate(introCreate, introLoop, introDestroy, 0, 0);
+    statePush(stateManager, introState);
 }
 
 void genericProcess(void)
 {
+    // Update key states for this frame before any state logic reads them
+    keyProcess();
+
     // Process active state callbacks (e.g. introLoop)
-    stateProcess(g_pStateManager);
+    stateProcess(stateManager);
 
     // Process hardware rendering and double-buffering updates
-    viewProcessManagers(g_pView);
+    viewProcessManagers(view);
     copProcessBlocks();
-    vPortWaitForEnd(g_pVPort);
+    vPortWaitForEnd(vPort);
 }
 
 void genericDestroy(void)
 {
     // Free allocated framework engines and objects
-    stateManagerDestroy(g_pStateManager);
-    stateDestroy(g_pIntroState);
-    viewDestroy(g_pView);
+    // stateManagerDestroy handles cbDestroy callbacks and internal state cleanup;
+    // do NOT call stateDestroy separately as it would double-free the state.
+    stateManagerDestroy(stateManager);
+    viewDestroy(view);
+    keyDestroy();
 }

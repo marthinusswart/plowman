@@ -5,9 +5,9 @@
 #include <ace/utils/extview.h>
 #include <ace/managers/state.h>
 
-extern tView *g_pView;
-extern tVPort *g_pVPort;
-extern tSimpleBufferManager *g_pBuffer;
-extern tStateManager *g_pStateManager;
+extern tView *view;
+extern tVPort *vPort;
+extern tSimpleBufferManager *buffer;
+extern tStateManager *stateManager;
 
 #endif // _GAME_H_
