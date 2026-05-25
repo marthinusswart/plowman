@@ -43,7 +43,7 @@ else
 	MKDIR = mkdir -p "$(@D)"
 endif
 
-CCFLAGS   = -g -MP -MMD -m68000 -Ofast -nostdlib -Wextra -Wno-unused-function -Wno-volatile-register-var -fomit-frame-pointer -fno-tree-loop-distribution -flto -fwhole-program -fno-exceptions -ffunction-sections -fdata-sections -I. -Iframework/ace/include -Iframework/ace/include/mini_std -DAMIGA -DBARTMAN_GCC -DACE_SCROLLBUFFER_X_MARGIN_SIZE=1 -DACE_SCROLLBUFFER_Y_MARGIN_SIZE=1 -DVSCODE -DACE_TILEBUFFER_TILE_TYPE=UWORD
+CCFLAGS   = -g -MP -MMD -m68000 -Ofast -nostdlib -Wextra -Wno-unused-function -Wno-volatile-register-var -fomit-frame-pointer -fno-tree-loop-distribution -flto -fno-exceptions -ffunction-sections -fdata-sections -I. -Iframework/ace/include -Iframework/ace/include/mini_std -DAMIGA -DBARTMAN_GCC -DACE_SCROLLBUFFER_X_MARGIN_SIZE=1 -DACE_SCROLLBUFFER_Y_MARGIN_SIZE=1 -DVSCODE -DACE_TILEBUFFER_TILE_TYPE=UWORD
 CPPFLAGS  = $(CCFLAGS) -fno-rtti -fcoroutines -fno-use-cxa-atexit 
 ASFLAGS   = -mcpu=68000 -g --register-prefix-optional -I$(SDKDIR)
 LDFLAGS   = -Wl,--emit-relocs,--gc-sections,-Ttext=0,-Map=$(OUT).map
