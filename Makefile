@@ -13,17 +13,17 @@ rwildcard=$(wildcard $1$2) $(foreach d,$(wildcard $1*),$(if $(wildcard $d/),$(ca
 subdirs := $(wildcard */)
 VPATH = $(subdirs)
 cpp_sources := $(wildcard *.cpp) $(wildcard $(addsuffix *.cpp,$(subdirs)))
-c_sources := $(wildcard *.c) $(wildcard $(addsuffix *.c,$(subdirs))) $(call rwildcard,framework/ace/src/,*.c)
+c_sources := $(wildcard *.c) $(call rwildcard,src/,*.c) $(wildcard $(addsuffix *.c,$(subdirs))) $(call rwildcard,framework/ace/src/,*.c)
 s_sources := support/gcc8_a_support.s support/depacker_doynax.s $(call rwildcard,framework/ace/src/,*.s)
 vasm_sources := $(wildcard *.asm) $(wildcard $(addsuffix *.asm, $(subdirs)))
 
 # Automatically set VPATH to all directories containing our discovered source files
 VPATH = $(sort $(dir $(cpp_sources) $(c_sources) $(s_sources) $(vasm_sources)))
 
-cpp_objects := $(sort $(addprefix obj/,$(patsubst %.cpp,%.o,$(notdir $(cpp_sources)))))
-c_objects := $(sort $(addprefix obj/,$(patsubst %.c,%.o,$(notdir $(c_sources)))))
-s_objects := $(sort $(addprefix obj/,$(patsubst %.s,%.o,$(notdir $(s_sources)))))
-vasm_objects := $(sort $(addprefix obj/,$(patsubst %.asm,%.o,$(notdir $(vasm_sources)))))
+cpp_objects := $(sort $(addprefix obj/,$(patsubst %.cpp,%.o,$(cpp_sources))))
+c_objects := $(sort $(addprefix obj/,$(patsubst %.c,%.o,$(c_sources))))
+s_objects := $(sort $(addprefix obj/,$(patsubst %.s,%.o,$(s_sources))))
+vasm_objects := $(sort $(addprefix obj/,$(patsubst %.asm,%.o,$(vasm_sources))))
 objects := $(cpp_objects) $(c_objects) $(s_objects) $(vasm_objects)
 
 # https://stackoverflow.com/questions/4036191/sources-from-subdirectories-in-makefile/4038459
@@ -91,9 +91,9 @@ $(c_objects) : obj/%.o : %.c
 $(s_objects): obj/%.o : %.s
 	$(info Assembling $<)
 	@-$(MKDIR)
-	@$(AS) $(ASFLAGS) --MD $(@D)/$*.d -o $@ $(CURDIR)/$<
+	@$(AS) $(ASFLAGS) --MD $(@:.o=.d) -o $@ $(CURDIR)/$<
 
 $(vasm_objects): obj/%.o : %.asm
 	$(info Assembling $<)
 	@-$(MKDIR)
-	@$(VASM) $(VASMFLAGS) -dependall=make -depfile $(@D)/$*.d -o $@ $(CURDIR)/$<
+	@$(VASM) $(VASMFLAGS) -dependall=make -depfile $(@:.o=.d) -o $@ $(CURDIR)/$<
