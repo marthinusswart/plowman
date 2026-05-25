@@ -67,6 +67,9 @@ void genericCreate(void)
     // Build and push the intro state
     introState = stateCreate(introCreate, introLoop, introDestroy, 0, 0);
     statePush(stateManager, introState);
+
+    // Disable OS multitasking and take full hardware control during gameplay
+    systemUnuse();
 }
 
 void genericProcess(void)
@@ -85,6 +88,9 @@ void genericProcess(void)
 
 void genericDestroy(void)
 {
+    // Re-enable OS multitasking before shutting down the game
+    systemUse();
+
     // Free allocated framework engines and objects
     // stateManagerDestroy handles cbDestroy callbacks and internal state cleanup;
     // do NOT call stateDestroy separately as it would double-free the state.

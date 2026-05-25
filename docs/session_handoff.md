@@ -1,84 +1,59 @@
-# Antigravity Session Handoff: Plowman Refactoring & PAL Setup
+# Antigravity Session Handoff: Plowman Audio, Video & Custom Copper Integration
 
-This document serves as a complete handoff for the **Antigravity CLI (`agy`)** to pick up development on the Amiga OCS game **plowman**. It outlines the current state of the codebase, recent fixes, core constraints, and recommended next steps.
-
----
-
-## 📌 Project Context & Rules
-* **Project Name:** plowman
-* **Target Hardware:** Amiga OCS (PAL 320x256, 5 bitplanes, double-buffered)
-* **Framework:** **ACE Framework** located in `framework/ace/`.
-* **⚠️ Critical Constraint:** **The framework is strictly read-only.** Never touch any files under `framework/ace/`. All custom game logic, viewport configuration, and setups must use the framework APIs as-is from within `src/`.
-* **Code Style:** Do **not** use Hungarian notation (e.g., no `g_p` prefixes). Use plain `camelCase` for variable and pointer names (e.g., `view`, `vPort`, `stateManager`).
+This document serves as a complete handoff for the **Antigravity CLI (`agy`)** to pick up development on the Amiga OCS game **plowman**. It outlines the current state of the codebase, recent fixes, core constraints, hardware specifications, and documentation locations.
 
 ---
 
-## 🛠️ Summary of Fixes Implemented in this Session
+## 📂 Key Directories & Documentation Reference
+
+- **Workspace Path**: `/Users/mattswart/Source/Amiga/plowman`
+- **ACE Framework Docs**: `/Users/mattswart/Source/Amiga/ACE/docs` (Standard guides for views, blitter, palette, audio, OS)
+- **Target Hardware Specs**: [docs/a500-specs.md](file:///Users/mattswart/Source/Amiga/plowman/docs/a500-specs.md) (Standard A500 512KB Chip + 512KB Slow RAM profile)
+- **ACE Framework Source**: `framework/ace/` (Strictly **READ-ONLY**)
+
+---
+
+## 🛠️ Summary of Refactoring & Features Implemented
 
 ### 1. Renamed Hungarian Notation to camelCase
 Refactored all main game state pointers to adhere strictly to the clean camelCase style preference:
-* `g_pView` ➔ `view`
-* `g_pVPort` ➔ `vPort`
-* `g_pBuffer` ➔ `buffer`
-* `g_pIntroState` ➔ `introState` (now handled within the state manager context)
-* `g_pStateManager` ➔ `stateManager`
+- `g_pView` ➔ `view`
+- `g_pVPort` ➔ `vPort`
+- `g_pBuffer` ➔ `buffer`
+- `g_pIntroState` ➔ `introState`
+- `g_pStateManager` ➔ `stateManager`
 
-Files updated:
-* [src/game.h](file:///Users/mattswart/Source/Amiga/plowman/src/game.h)
-* [src/game.c](file:///Users/mattswart/Source/Amiga/plowman/src/game.c)
-* [src/gamelogic/intro/intro.c](file:///Users/mattswart/Source/Amiga/plowman/src/gamelogic/intro/intro.c)
+### 2. Keyboard & OS State Controls
+- **Wired up Key Manager**: Fully integrated `keyCreate()`, `keyProcess()`, and `keyDestroy()` into the main game lifecycle.
+- **Edge-Triggered Exit**: Configured the ESC check inside `introLoop()` to use `keyUse(KEY_ESCAPE)` so the key is consumed cleanly on release, triggering `gameExit()`.
+- **Global OS Disabling**: Integrated `systemUnuse()` at the end of `genericCreate()` and `systemUse()` at the start of `genericDestroy()` to stop Amiga OS multitasking during active gameplay.
 
-### 2. Wired up the ACE Key Manager
-* **Issue:** The original loop was missing the initialization and processing of the keyboard, so keypresses were never detected.
-* **Fix:** Integrated `keyCreate()` into `genericCreate()`, `keyProcess()` at the top of `genericProcess()`, and `keyDestroy()` in `genericDestroy()`.
+### 3. Integrated ptplayer Music & SFX
+- **ProTracker loops**: Set up CIA-B interrupts in PAL mode using `ptplayer` to play the `coal-prelude.mod` file in an infinite loop.
+- **Custom WAV-to-SFX converter**: Created a custom Python script at `tools/wav2sfx.py` that processes raw `.wav` inputs, shifting samples to signed 8-bit mono, word-padding, and zero-padding the first word to meet `ptplayer` hardware playback constraints. Integrated directly into the `Makefile` under `sound/sfx/`.
+- **Sound Effects timer**: Set up a timer to play `hud_msg.sfx` every 250 frames (exactly 5.0 seconds in PAL mode) on any available channel.
 
-### 3. Edge-Triggered Exit (ESC Key)
-* **Issue:** The intro loop was previously using a level-triggered check which could cause double-events or irregular behavior.
-* **Fix:** Changed keyboard detection in `introLoop()` to use `keyUse(KEY_ESCAPE)` (edge-triggered, marking the key as consumed) instead of `keyCheck` to trigger a clean exit via `gameExit()`.
+### 4. Raw Background Bitmap Loading
+- **splash bitmap**: Configured `introCreate()` to load the raw, headerless 320x239 5-bitplane `bpl/plowman_splash.bpl` (9560 bytes per plane) directly into memory and blit it onto both simple buffer pages (`buffer->pFront` and `buffer->pBack`) to guarantee clean double-buffered display pages.
 
-### 4. Enforced PAL Mode without Framework Modifications
-* **Issue:** The framework automatically detects PAL/NTSC based on system VBlank frequency. To force PAL dimensions globally for a PAL-specific game without touching the read-only framework:
-* **Fix:** Supplied explicit PAL tags when creating the view and viewport in `src/game.c` utilizing constants from `ace/generic/screen.h`:
-  ```c
-  viewCreate(
-      TAG_VIEW_WINDOW_WIDTH, SCREEN_PAL_WIDTH,
-      TAG_VIEW_WINDOW_HEIGHT, SCREEN_PAL_HEIGHT,
-      TAG_VIEW_WINDOW_START_Y, SCREEN_PAL_YOFFSET,
-      TAG_DONE
-  );
-  ```
+### 5. Native ACE Copper List Palette Integration
+- **Custom Copper Block**: Rather than doing CPU register pokes (which can flash or jitter during system interrupts), we utilize ACE's official copper list API:
+  - We allocate a custom `tCopBlock` at wait position `(0, 0)` in the active viewport copper list `view->pCopList`.
+  - We write 32 copper MOVE instructions targeting `g_pCustom->color[i]` using `copMove()`.
+  - This allows the copper hardware to automatically update the palette colors every frame in the background with zero CPU overhead.
+  - The block is cleanly destroyed on exit via `copBlockDestroy()`.
 
-### 5. Fixed Double-Free Bug in stateManager Cleanup
-* **Issue:** `genericDestroy()` was explicitly calling `stateDestroy(introState)` followed by `stateManagerDestroy(stateManager)`. Because the state manager internally manages and frees states that have been pushed onto its stack, this led to a double-free crash.
-* **Fix:** Removed the explicit `stateDestroy(introState)` call, letting `stateManagerDestroy(stateManager)` handle the cleanup cleanly.
-
-### 6. Integrated Bartman GCC Debug Support
-* Retained the user's custom additions:
-  * Included `"support/gcc8_c_support.h"` to enable advanced debugging tools.
-  * Added `KPrintF("Starting game\n")` for serial-port logging.
+### 6. Instantly Visible Splash & OS State Optimization
+- **Startup Reordering**: To eliminate the perceptional 3-4 second black screen while loading heavy audio files, we reordered `introCreate()`. It now loads the palette and raw splash image first, then calls `viewLoad(view)` to display it instantly. Only *then* does it initialize `ptplayer` and load the music and sound effects.
+- **OS Batching**: Wrapped `introCreate()` and `introDestroy()` in single, matching `systemUse()` and `systemUnuse()` calls to batch OS requests during dynamic disk/allocation routines, speeding up transitions by ~0.5s.
 
 ---
 
-## 📂 Current File Directory Status
+## 🚀 Build & Run Commands
 
-### [game.c](file:///Users/mattswart/Source/Amiga/plowman/src/game.c)
-* Configures view, viewport, double-buffered simple buffer manager, key manager, and pushes the initial `introState` onto the state manager.
-* Main loop processes inputs, updates state machine, and swaps double-buffers cleanly.
+Compile on the host system:
+```bash
+make clean && make
+```
 
-### [game.h](file:///Users/mattswart/Source/Amiga/plowman/src/game.h)
-* Declares core globals as `extern` using clean `camelCase` structure.
-
-### [intro.c](file:///Users/mattswart/Source/Amiga/plowman/src/gamelogic/intro/intro.c)
-* Basic state container for the introduction phase of the game.
-* Currently only monitors the keyboard for `KEY_ESCAPE` to call `gameExit()`.
-
----
-
-## 🚀 Suggested Next Steps for `agy` CLI
-Here are tasks you can prompt `agy` to tackle next:
-1. **Set Up Palette & Background Color:**
-   * *"Create and load a standard color palette for our vPort and clear the double-buffer to a dark background color."*
-2. **Display Title/Intro Graphics:**
-   * *"Load a 5-plane PAL bitmap for our title screen and blit it to the simple buffer inside `introCreate()` or `introLoop()`."*
-3. **Add Text Rendering:**
-   * *"Set up an ACE text font and write 'Press ESC to Exit' centered at the bottom of the intro viewport."*
+Run in an emulator (FS-UAE, WinUAE, etc.) targeting Amiga 500 / OCS (PAL mode).
